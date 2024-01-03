@@ -4,6 +4,12 @@ ChessWrapper.py:
 - Wrapper class for the Chess.Board class
 - Originally meant to use a generalized API as to support more games, but likely would have to tweak this in the future
 
+evaluation.py:
+- Contains the functions needed to perform board, move, piece evaluations
+
+lr_eval.pkl:
+- pickle file containing the LinearRegression static evaluation model
+
 Model Development.ipynb:
 - Uses data from https://www.kaggle.com/datasets/ronakbadhe/chess-evaluations
 - Tunes feature weights using LinearRegression model from sklearn
