@@ -2,7 +2,7 @@ import chess
 import pandas as pd
 
 # Piece values in centipawns (e.g. 100 centipawns = 1 'point', where Pawns are generally counted as 1 point colloquially)
-# Using RofChade's PeSTO tapered eval numbers
+# Using RofChade's PeSTO tapered eval PSTs and piece values
 # http://www.talkchess.com/forum3/viewtopic.php?f=2&t=68311&start=19
 # MG = Middle Game, EG = End Game
 
@@ -168,6 +168,7 @@ EG_KING = [
     -53, -34, -21, -11, -28, -14, -24, -43]
 
 # Most Valuable Victim, Least Valuable Attacker Heuristic to sort captures
+# from rustic chess engine: https://rustic-chess.org/search/ordering/ordering.html
 MVV_LVA = [
     [0, 0, 0, 0, 0, 0, 0],       # victim K, attacker K, Q, R, B, N, P, None
     [50, 51, 52, 53, 54, 55, 0], # victim Q, attacker K, Q, R, B, N, P, None
@@ -178,7 +179,7 @@ MVV_LVA = [
     [0, 0, 0, 0, 0, 0, 0],       # victim None, attacker K, Q, R, B, N, P, None
 ]
 
-# map pieces to their PSQTs for middlegame
+# map pieces to their PSTs for middlegame
 MG_MAP = {
     chess.PAWN: MG_PAWN,
     chess.KNIGHT: MG_KNIGHT,
@@ -188,7 +189,7 @@ MG_MAP = {
     chess.KING: MG_KING
 }
 
-# map pieces to their PSQTs for endgame
+# map pieces to their PSTs for endgame
 EG_MAP = {
     chess.PAWN: EG_PAWN,
     chess.KNIGHT: EG_KNIGHT,
@@ -210,37 +211,18 @@ Q_PHASE = 4
 TOTAL_PHASE = P_PHASE*16 + N_PHASE*4 + B_PHASE*4 + R_PHASE*4 + Q_PHASE*2
 
 def get_num_pieces(board):
-    # get pawn counts
-    wp = len(board.pieces(chess.PAWN, chess.WHITE))
-    bp = len(board.pieces(chess.PAWN, chess.BLACK))
-    
-    # get knight counts
-    wn = len(board.pieces(chess.KNIGHT, chess.WHITE))
-    bn = len(board.pieces(chess.KNIGHT, chess.BLACK))
-
-    # get bishop counts
-    wb = len(board.pieces(chess.BISHOP, chess.WHITE))
-    bb = len(board.pieces(chess.BISHOP, chess.BLACK))
-
-    # get rook counts
-    wr = len(board.pieces(chess.ROOK, chess.WHITE))
-    br = len(board.pieces(chess.ROOK, chess.BLACK))
-
-    # get queen counts
-    wq = len(board.pieces(chess.QUEEN, chess.WHITE))
-    bq = len(board.pieces(chess.QUEEN, chess.BLACK))
-    
+    """Return the number of pieces of each color and type, along with their associated phase value."""
     return (
-        (wp, P_PHASE), 
-        (bp, P_PHASE), 
-        (wn, N_PHASE), 
-        (bn, N_PHASE), 
-        (wb, B_PHASE), 
-        (bb, B_PHASE), 
-        (wr, R_PHASE), 
-        (br, R_PHASE), 
-        (wq, Q_PHASE), 
-        (bq, Q_PHASE)
+        (len(board.pieces(chess.PAWN, chess.WHITE)), P_PHASE), 
+        (len(board.pieces(chess.PAWN, chess.BLACK)), P_PHASE), 
+        (len(board.pieces(chess.KNIGHT, chess.WHITE)), N_PHASE), 
+        (len(board.pieces(chess.KNIGHT, chess.BLACK)), N_PHASE), 
+        (len(board.pieces(chess.BISHOP, chess.WHITE)), B_PHASE), 
+        (len(board.pieces(chess.BISHOP, chess.BLACK)), B_PHASE), 
+        (len(board.pieces(chess.ROOK, chess.WHITE)), R_PHASE), 
+        (len(board.pieces(chess.ROOK, chess.BLACK)), R_PHASE), 
+        (len(board.pieces(chess.QUEEN, chess.WHITE)), Q_PHASE), 
+        (len(board.pieces(chess.QUEEN, chess.BLACK)), Q_PHASE)
     )
     
 def get_phase(state):
@@ -258,25 +240,24 @@ def get_phase(state):
 
 def evaluate_piece(piece, square, phase):
     """Return the tapered evaluation of a given piece, accounting for its material and positional value (from its PSTs)."""
-    mg_score = 0
-    eg_score = 0
+    mg_evaluation = 0
+    eg_evaluation = 0
     if piece.color == chess.WHITE:
-        mg_score = MG_MAP[piece.piece_type][56 ^ square] + MG_VALUES[piece.piece_type]
-        eg_score = EG_MAP[piece.piece_type][56 ^ square] + EG_VALUES[piece.piece_type]
+        mg_evaluation = MG_MAP[piece.piece_type][56 ^ square] + MG_VALUES[piece.piece_type]
+        eg_evaluation = EG_MAP[piece.piece_type][56 ^ square] + EG_VALUES[piece.piece_type]
     else:
-        mg_score = MG_MAP[piece.piece_type][square] + MG_VALUES[piece.piece_type]
-        eg_score = EG_MAP[piece.piece_type][square] + EG_VALUES[piece.piece_type]
+        mg_evaluation = MG_MAP[piece.piece_type][square] + MG_VALUES[piece.piece_type]
+        eg_evaluation = EG_MAP[piece.piece_type][square] + EG_VALUES[piece.piece_type]
 
     # return weighted average of mg_score, eg_score by phase
-    return mg_score * (1 - phase) + eg_score * (phase)
+    return mg_evaluation * (1 - phase) + eg_evaluation * (phase)
 
 def tapered_eval(board):
+    """Return the tapered evaluation of the given board."""
     phase = get_phase(board)
 
-    material_counts = {
-        chess.WHITE : 0,
-        chess.BLACK : 0
-    }
+    white_material = 0
+    black_material = 0
     
     # python-chess defines A1 as 0, H8 as 63
     for square in range(64):
@@ -285,44 +266,11 @@ def tapered_eval(board):
             continue
         piece_val = evaluate_piece(piece, square, phase)
         if piece.color == chess.WHITE:
-            material_counts[chess.WHITE] += piece_val
+            white_material += piece_val
         else:
-            material_counts[chess.BLACK] += piece_val
+            black_material += piece_val
     
-    return material_counts[chess.WHITE] - material_counts[chess.BLACK]
-
-# def tapered_eval(state):
-#     """Return a heuristic estimate of the current position. Higher values favor White, lower values favor Black."""
-#     outcome = state.outcome()
-
-#     # in case the game has ended.
-#     if outcome is not None:
-#         # return large magnitude constant for case of checkmate
-#         if outcome.winner == chess.WHITE:
-#             return BASE_VALUES[chess.KING]
-#         elif outcome.winner == chess.BLACK:
-#             return -BASE_VALUES[chess.KING]
-#         else: # draw
-#             return 0 
-#     phase = get_phase(state)
-
-#     material_counts = {
-#         chess.WHITE : 0,
-#         chess.BLACK : 0
-#     }
-
-#     # python-chess defines A1 as 0, H8 as 63
-#     for square in range(64):
-#         piece = state.piece_at(square)
-#         if piece is None: # skip trying to evaluate empty squares
-#             continue
-#         piece_val = evaluate_piece(piece, square, phase)
-#         if piece.color == chess.WHITE:
-#             material_counts[chess.WHITE] += piece_val
-#         else:
-#             material_counts[chess.BLACK] += piece_val
-
-#     return material_counts[chess.WHITE] - material_counts[chess.BLACK]
+    return white_material - black_material
 
 def mobility(state):
     """Mobility is estimated using the number of legal moves. Returns White's mobility - Black's mobility."""
@@ -471,24 +419,20 @@ def evaluate_capture(board: chess.Board, move: chess.Move) -> float:
     """
     Given a capturing move, weight the trade being made.
     """
-    if board.is_en_passant(move):
-        return BASE_VALUES[chess.PAWN]
     to_piece = board.piece_at(move.to_square)
     from_piece = board.piece_at(move.from_square)
     if to_piece is None or from_piece is None:
-        raise Exception('Error, piece not found')
+        return 0
     return BASE_VALUES[to_piece.piece_type] - BASE_VALUES[from_piece.piece_type]
 
 def PST_val(piece, square, endgame):
     if piece.color == chess.WHITE:
         if endgame:
             return EG_MAP[piece.piece_type][56 ^ square]
-
         return MG_MAP[piece.piece_type][56 ^ square]
     else:
         if endgame:
             return EG_MAP[piece.piece_type][square]
-        
         return MG_MAP[piece.piece_type][square]
 
 def mvv_lva_idx(piece_type):
@@ -530,7 +474,7 @@ def move_value(board, move):
 
     piece = board.piece_at(move.from_square)
 
-    # endgame if neither side has a queen
+    # quick estimate: endgame if neither side has a queen
     endgame = True if (board.pieces(chess.QUEEN, chess.BLACK) == 0 and board.pieces(chess.QUEEN, chess.WHITE) == 0) else False
         
     if piece:

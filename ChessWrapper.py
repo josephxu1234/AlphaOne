@@ -1,6 +1,5 @@
 from chess import Board
 import chess
-from material_values import *
 import numpy as np
 
 class ChessWrapper(Board):
