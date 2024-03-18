@@ -1,5 +1,6 @@
 # AlphaOne
 
+## View my paper! Click on jx6_final_written_report.pdf!
 ChessWrapper.py:
 - Wrapper class for the Chess.Board class
 - Originally meant to use a generalized API as to support more games, but likely would have to tweak this in the future
